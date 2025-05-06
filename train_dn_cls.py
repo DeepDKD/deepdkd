@@ -180,7 +180,7 @@ if __name__ == '__main__':
     os.environ['lr'] = '0.001'
     os.environ['batch_size'] = '48'
     os.environ['image_size'] = '512'
-    os.environ['epochs'] = '100'
+    os.environ['epochs'] = '50'
     os.environ['device'] = 'cuda:0'
     os.environ['num_workers'] = '8'
     os.environ['load_pretrain'] = "model/model_078.pth"
