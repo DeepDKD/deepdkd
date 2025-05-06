@@ -5,6 +5,7 @@ ImageFile.LOAD_TRUNCATED_IMAGES = True
 import pandas
 import torch
 import json
+import numpy as np
 import torch.nn.functional as F
 from sklearn.metrics import roc_auc_score, cohen_kappa_score
 from torch.utils.data import Dataset
@@ -70,14 +71,13 @@ class DN_dataset(Dataset):
 
     @cached_property
     def pos_weight(self) -> torch.FloatTensor:
-        w = [(self.data['DKD'] > 0).mean()]
+        w = [(self.data['DN'] > 0).mean()]
         return torch.FloatTensor(w)
 
     def get_data(self):
         data = self.data
         for idx, obj in data.iterrows():
             img_list = str(obj[self.image_column[0]]).split(',')
-
             for img in img_list[:]:
                 image_path = os.path.join(self.image_root, img)
                 if os.path.exists(image_path):
@@ -104,6 +104,7 @@ class DN_dataset(Dataset):
             image = self.transform(image=image)['image']
         return image, self.labels[item]
 
+
 class DNCls(Trainer):
     @cached_property
     def pos_weight(self):
@@ -118,8 +119,27 @@ class DNCls(Trainer):
             backbone=self.cfg.model,
             output_size=2
         )
-        for param in model.backbone.parameters():
-            param.requires_grad = False
+        
+        if os.path.exists(self.cfg.load_pretrain):
+            pretrain_dict = torch.load(self.cfg.load_pretrain, map_location='cpu')
+            model_dict = model.state_dict()
+            pretrain_dict = {
+                k: v for k, v in pretrain_dict.items()
+                if k in model_dict and not k.startswith('fc.2')
+            }
+            model_dict.update(pretrain_dict)
+            model.load_state_dict(model_dict)
+            print(f"Loaded matched pretrain weights from {self.cfg.load_pretrain}")
+
+            for param in model.parameters():
+                param.requires_grad = False
+            for param in model.fc.parameters():
+                param.requires_grad = True
+
+            # trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
+            # total_params = sum(p.numel() for p in model.parameters())
+            # print(f"trainable_params: {trainable_params}/{total_params} ({trainable_params / total_params:.2%})")
+
         return model
 
     @cached_property
@@ -157,7 +177,7 @@ class DNCls(Trainer):
 if __name__ == '__main__':
     import os
     os.environ['model'] = 'resnet50'
-    os.environ['lr'] = '0.00001'
+    os.environ['lr'] = '0.001'
     os.environ['batch_size'] = '48'
     os.environ['image_size'] = '512'
     os.environ['epochs'] = '100'
